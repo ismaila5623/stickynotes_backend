@@ -1,0 +1,513 @@
+import './bootstrap';
+
+import Alpine from 'alpinejs';
+import axios from 'axios';
+
+window.Alpine = Alpine;
+
+Alpine.start();
+
+
+let titles = document.querySelectorAll('.title')
+let categoriesName = document.querySelectorAll('.categories-name')
+let menuIconContainers = document.querySelectorAll('.menu-icon--container')
+let sidebar = document.querySelector('.sidebar')
+let navItemContainer = document.querySelector('.nav .nav-item--container')
+let categoriesCreateContainer = document.querySelector('.categories-create--container')
+let categoryAddInput = categoriesCreateContainer.querySelector('.categories-add--input')
+let categoryAddBtn = categoriesCreateContainer.querySelector('.categories-add--btn')
+let categoriesItemContainer = document.querySelector('.categories-item--container')
+let addNoteContainer = document.querySelector('#add-note--container')
+let newNoteContainer = addNoteContainer.querySelector('.note')
+let newNoteBtn = document.querySelector('#new-note--btn')
+let notes = document.querySelector('.notes')
+let notesTitle = document.querySelector('.notes-title')
+
+let emptyCategoryText = 'The category is empty'
+let emptyNoteText = 'This category has no note'
+
+titles.forEach(title=>{
+    marquee(title)
+})
+
+loadPage()
+
+function loadPage(){
+    loadCategories();
+    loadLastVisitedCategoryNotes()
+}
+function loadCategories(){
+    submitRequest('get', '/categories').then(res=>{
+        console.log(res.data)
+        clearContainer(categoriesItemContainer)
+        res.data.forEach( data => {
+            createCategoryEl(data)
+        })
+        empty(emptyCategoryText, categoriesItemContainer)
+    })
+}
+function getlastVisitedCategory(){
+    submitRequest('get', '/getLastVisitedCategory').then(res=>{
+        notesTitle.innerHTML = res.data
+    })
+}
+function loadNotes(){
+    submitRequest('get', '/notes').then(res=>{
+        console.log(res.data)
+        clearContainer(notes)
+        res.data.forEach( data => {
+                createNoteEl(data)
+        })
+        empty(emptyNoteText, notes)
+    })
+}
+function loadLastVisitedCategoryNotes(){
+    getlastVisitedCategory();
+    loadNotes()
+}
+function clearContainer(container){
+    container.innerHTML = ''
+}
+function submitRequest(method, url, data = {}){
+    return axios[method](url, data);
+}
+
+newNoteBtn.addEventListener('click', e => {
+    show([addNoteContainer])
+})
+
+newNoteContainer.addEventListener('click', e => {
+    newNoteContainerClick(e.target)
+})
+
+function newNoteContainerClick(el) {
+    let elParent = getTargetParent(el, 'note')
+    switch (true) {
+        case el.classList.contains('save'):
+            createNote(elParent)
+            // createNoteEl('new note')
+            // hide([addNoteContainer])
+            console.log(elParent.querySelector('.note-bottom .input-dialog').files)
+            break;
+        case el.classList.contains('minimize'):
+            hide([addNoteContainer])
+            break;
+        case el.classList.contains('cancel'):
+            hide([addNoteContainer])
+            break;
+        case getTargetParent(el, 'btn-label--add-container').classList.contains('btn-label--add-container'):
+            noteFileDialog(elParent)
+            break;
+    }
+}
+function createNote(el){
+    let title = el.querySelector('.note .note-title').value
+    let note = el.querySelector('.note .note-text--input').value
+    submitRequest('post', '/notes', {title, note}).then(res=>{
+        createNoteEl(res.data)
+        hide([addNoteContainer])
+    })
+}
+categoriesCreateContainer.addEventListener('click', e => {
+    addCategoryToggle()
+})
+
+categoriesCreateContainer.addEventListener('submit', e => {
+    e.preventDefault();
+    let value = categoryAddInput.value;
+    submitRequest('post', '/categories', {name:value}).then(res =>{
+        createCategoryEl(res.data)
+        categoryAddInput.value = ''
+    })
+    console.log('submited')
+})
+
+function noteClick(el) {
+    let elParent = getTargetParent(el, 'note')
+    console.log(el)
+    switch (true) {
+        case el.classList.contains('edit'):
+            console.log('edited')
+            noteEdit(elParent)
+            break;
+        case el.classList.contains('save'):
+            noteSave(elParent)
+            break;
+        case el.classList.contains('delete'):
+            noteDelete(elParent)
+            break;
+        case el.classList.contains('cancel'):
+            noteCancel(elParent)
+            break;
+        case getTargetParent(el, 'btn-label--add-container').classList.contains('btn-label--add-container'):
+            noteFileDialog(elParent)
+            break;
+    }
+}
+
+function confirmDelete(){
+    return confirm('Are you sure you want to delete category\n\nnote: all of its notes will be deleted along');
+}
+
+function noteEdit(el) {
+    let noteTextInput = el.querySelector('.note-text--input')
+    let noteText = el.querySelector('.note-text')
+    let editBtn = el.querySelector('.note-top .edit')
+    let deleteBtn = el.querySelector('.note-top .delete')
+    let cancelBtn = el.querySelector('.note-top .cancel')
+    show([noteTextInput, cancelBtn])
+    hide([noteText, editBtn, deleteBtn])
+    noteTextInput.focus()
+}
+let img = document.querySelector('.img')
+console.log(img)
+
+
+function noteSave(el) {
+    let titleInput = el.querySelector('.note .note-title')
+    let noteInput = el.querySelector('.note .note-text--input')
+
+    let noteTextInput = el.querySelector('.note-text--input')
+    let noteText = el.querySelector('.note-text')
+    let editBtn = el.querySelector('.note-top .edit')
+    let deleteBtn = el.querySelector('.note-top .delete')
+    let cancelBtn = el.querySelector('.note-top .cancel')
+
+    let title = titleInput.value
+    let note = noteInput.value
+
+    submitRequest('put', '/notes/'+el.dataset.id, {title, note}).then(res => {
+        if(res.data == 1){
+            titleInput.value = title
+            noteText.textContent = note
+            hide([noteTextInput, cancelBtn])
+            show([noteText, editBtn, deleteBtn])
+        }
+    })
+    console.log(el.querySelector('.note-bottom .input-dialog').files)
+}
+
+function noteDelete(el) {
+    submitRequest('delete', '/notes/'+el.dataset.id).then(res =>{
+        if(res.data == 1){
+            el.remove()
+            empty(emptyNoteText, notes)
+        }
+    })
+}
+
+function noteCancel(el) {
+    let noteTextInput = el.querySelector('.note-text--input')
+    let noteText = el.querySelector('.note-text')
+    let editBtn = el.querySelector('.note-top .edit')
+    let deleteBtn = el.querySelector('.note-top .delete')
+    let cancelBtn = el.querySelector('.note-top .cancel')
+    hide([noteTextInput, cancelBtn])
+    show([noteText, editBtn, deleteBtn])
+}
+
+function noteFileDialog(el) {
+    let fileDialog = el.querySelector('.note-bottom .input-dialog')
+    fileDialog.click()
+}
+
+function categoryClick(el) {
+    let elParent = getTargetParent(el, 'categories-item')
+    console.log(el)
+    switch (true) {
+        case el.classList.contains('edit'):
+            categoryEdit(elParent)
+            break;
+        case el.classList.contains('save'):
+            categorySave(elParent)
+            break;
+        case el.classList.contains('delete'):
+            categoryDelete(elParent)
+            break;
+        case el.classList.contains('cancel'):
+            categoryCancel(elParent)
+            break;
+        case getTargetParent(el, 'categories-link').classList.contains('categories-link'):
+            categoryNotes(elParent)
+            break;
+    }
+}
+
+function categoryEdit(el) {
+    let editInput = el.querySelector('.categories-edit--input')
+    let categoriesName = el.querySelector('.categories-name')
+    let saveBtn = el.querySelector('.save')
+    let editBtn = el.querySelector('.edit')
+    let deleteBtn = el.querySelector('.delete')
+    let cancelBtn = el.querySelector('.cancel')
+    show([editInput, saveBtn, cancelBtn])
+    hide([categoriesName, editBtn, deleteBtn])
+}
+
+function categorySave(el) {
+    let editInput = el.querySelector('.categories-edit--input')
+    let categoriesName = el.querySelector('.categories-name')
+    let value = editInput.value
+    submitRequest('put', '/categories/'+el.dataset.id, {name:value}).then(res => {
+        if(res.data == 1){
+            categoriesName.textContent = value
+            hide([editInput])
+            show([categoriesName])
+        }
+    })
+}
+
+function categoryDelete(el) {
+    if(confirmDelete()){
+        submitRequest('delete', '/categories/'+el.dataset.id).then(res =>{
+            if(res.data == 1 || res.data == 0){
+                el.remove()
+                empty(emptyCategoryText, categoriesItemContainer)
+            }
+            if(res.data == 0){
+                loadLastVisitedCategoryNotes()
+            }
+        })
+    }
+}
+
+function categoryCancel(el) {
+    let editInput = el.querySelector('.categories-edit--input')
+    let categoriesName = el.querySelector('.categories-name')
+    let saveBtn = el.querySelector('.save')
+    let editBtn = el.querySelector('.edit')
+    let deleteBtn = el.querySelector('.delete')
+    let cancelBtn = el.querySelector('.cancel')
+    hide([editInput, saveBtn, cancelBtn])
+    show([categoriesName, editBtn, deleteBtn])
+}
+
+function categoryNotes(el){
+    let categoriesName = el.querySelector('.categories-name')
+    notesTitle.textContent = categoriesName.textContent
+    submitRequest('put', '/lastVisitedCategory/'+el.dataset.id).then(res =>{
+        console.log(res.data)
+        if(res.data == 1){
+            loadNotes();
+        }
+    })
+}
+function show(elements) {
+    elements.forEach(el => {
+        el.classList.remove('hidden')
+    })
+}
+
+function hide(elements) {
+    elements.forEach(el => {
+        el.classList.add('hidden')
+    })
+}
+
+menuIconContainers.forEach(menuIconContainer => {
+    menuIconContainer.addEventListener('click', e => {
+        menuIconContainer.classList.toggle('close')
+        if (getTargetParent(e.target, 'nav').classList.contains('nav')) {
+            navbarToggle()
+        } else if (getTargetParent(e.target, 'sidebar').classList.contains('sidebar')) {
+            sidebarToggle()
+        }
+    })
+})
+
+function addCategoryToggle() {
+    categoryAddInput.classList.toggle('hidden')
+    if (!categoryAddInput.classList.contains('hidden')) {
+        categoryAddBtn.classList.remove('hidden')
+        categoryAddInput.focus();
+    } else {
+        categoryAddBtn.classList.add('hidden')
+    }
+}
+
+function navbarToggle() {
+    if (menuIconContainers[0].classList.contains('close')) {
+        navItemContainer.classList.add('show-nav--menu')
+    } else {
+        navItemContainer.classList.remove('show-nav--menu')
+    }
+}
+
+function sidebarToggle() {
+    if (menuIconContainers[1].classList.contains('close')) {
+        sidebar.classList.add('show-sidebar')
+    } else {
+        sidebar.classList.remove('show-sidebar')
+    }
+}
+
+function marquee(tag) {
+    if (exceedsLimit(tag)) {
+        let marquee = document.createElement('marquee');
+        marquee.textContent = tag.textContent;
+        tag.innerHTML = '';
+        tag.append(marquee);
+    }
+    document.querySelector('#new-tag').remove()
+}
+
+function exceedsLimit(tag) {
+    let newTag = document.createElement(tag.tagName)
+    newTag.id = 'new-tag'
+    newTag.style.width = 'fit-content'
+    newTag.style.position = 'absolute'
+    newTag.style.visibility = 'hidden'
+    document.body.append(newTag)
+    newTag.innerHTML = tag.textContent;
+    if (newTag.getBoundingClientRect().width > tag.getBoundingClientRect().width) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+function getTargetParent(el, parentClass) {
+    let newEl = el;
+    while (!newEl.classList.contains(parentClass)) {
+        if (newEl.tagName.toLowerCase() == 'body') {
+            break;
+        }
+        newEl = newEl.parentElement;
+    }
+    return newEl;
+}
+
+function createCategoryEl(data = {}) {
+    let li = document.createElement('li')
+    let a = document.createElement('a')
+    let input = document.createElement('input')
+    let span = document.createElement('span')
+    let div = document.createElement('div')
+    let spanSave = document.createElement('span')
+    let spanEdit = document.createElement('span')
+    let spanDel = document.createElement('span')
+    let spanCancel = document.createElement('span')
+    li.setAttribute('data-id', data.id)
+    li.setAttribute('class', 'categories-item')
+    a.setAttribute('class', 'categories-link')
+    a.setAttribute('href', '#')
+    span.setAttribute('class', 'categories-name')
+    input.setAttribute('class', 'categories-edit--input hidden')
+    div.setAttribute('class', 'categories-tools')
+    spanSave.setAttribute('class', 'save hidden')
+    spanEdit.setAttribute('class', 'edit')
+    spanDel.setAttribute('class', 'delete')
+    spanCancel.setAttribute('class', 'cancel hidden')
+    input.value = data.name
+    span.textContent = data.name
+    spanSave.textContent = 'save'
+    spanEdit.textContent = 'edit'
+    spanDel.textContent = 'delete'
+    spanCancel.textContent = 'cancel'
+    div.append(spanSave)
+    div.append(spanEdit)
+    div.append(spanDel)
+    div.append(spanCancel)
+    a.append(span)
+    a.append(input)
+    a.append(div)
+    li.append(a)
+    li.addEventListener('click', e => {
+        e.preventDefault();
+        categoryClick(e.target)
+    })
+    categoriesItemContainer.insertBefore(li, categoriesItemContainer.firstElementChild)
+    empty(emptyCategoryText, categoriesItemContainer)
+    marquee(span)
+}
+
+function createNoteEl(data) {
+    let note = document.createElement('div')
+    let noteTop = document.createElement('div')
+    let noteMiddle = document.createElement('div')
+    let noteBottom = document.createElement('div')
+    let noteTitle = document.createElement('input')
+    let categoriesTools = document.createElement('div')
+    let saveBtn = document.createElement('span')
+    let editBtn = document.createElement('span')
+    let deleteBtn = document.createElement('span')
+    let cancelBtn = document.createElement('span')
+    let noteTextInput = document.createElement('textarea')
+    let noteText = document.createElement('p')
+    let attachmentContainer = document.createElement('div')
+    let attachments = document.createElement('span')
+    let attachmentsAddContainer = document.createElement('div')
+    let attachmentsAddLabel = document.createElement('span')
+    let attachmentsAddBtn = document.createElement('div')
+    let inputDialog = document.createElement('input')
+    note.setAttribute('class', 'note')
+    note.setAttribute('data-id', data.id)
+    noteTop.setAttribute('class', 'note-top')
+    noteMiddle.setAttribute('class', 'note-middle')
+    noteBottom.setAttribute('class', 'note-bottom')
+    noteTitle.setAttribute('class', 'note-title')
+    noteTitle.setAttribute('type', 'text')
+    categoriesTools.setAttribute('class', 'categories-tools')
+    saveBtn.setAttribute('class', 'save')
+    editBtn.setAttribute('class', 'edit')
+    deleteBtn.setAttribute('class', 'delete')
+    cancelBtn.setAttribute('class', 'cancel hidden')
+    noteTextInput.setAttribute('class', 'note-text--input hidden')
+    noteText.setAttribute('class', 'note-text')
+    attachmentContainer.setAttribute('class', 'attachment-container')
+    attachments.setAttribute('class', 'attachments')
+    attachmentsAddContainer.setAttribute('class', 'btn-label--add-container')
+    attachmentsAddLabel.setAttribute('class', 'add-btn--label')
+    attachmentsAddBtn.setAttribute('class', 'add-btn--container')
+    inputDialog.setAttribute('type', 'file')
+    inputDialog.setAttribute('accept', 'image/*')
+    inputDialog.multiple = true
+    inputDialog.setAttribute('class', 'input-dialog hidden')
+    noteTitle.value = data.title ? data.title : 'Edit title'
+    saveBtn.textContent = 'save'
+    editBtn.textContent = 'edit'
+    deleteBtn.textContent = 'delete'
+    cancelBtn.textContent = 'cancel'
+    noteTextInput.value = data.note
+    noteText.textContent = data.note
+    attachments.innerHTML = 'images <sup class="attachments-count">5</sup>'
+    attachmentsAddLabel.textContent = 'add images'
+    categoriesTools.append(saveBtn)
+    categoriesTools.append(editBtn)
+    categoriesTools.append(deleteBtn)
+    categoriesTools.append(cancelBtn)
+    noteTop.append(noteTitle)
+    noteTop.append(categoriesTools)
+    noteMiddle.append(noteTextInput)
+    noteMiddle.append(noteText)
+    attachmentsAddContainer.append(attachmentsAddLabel)
+    attachmentsAddContainer.append(attachmentsAddBtn)
+    attachmentContainer.append(attachments)
+    attachmentContainer.append(attachmentsAddContainer)
+    attachmentContainer.append(inputDialog)
+    noteBottom.append(attachmentContainer)
+    note.append(noteTop)
+    note.append(noteMiddle)
+    note.append(noteBottom)
+    note.addEventListener('click', e => {
+        // e.preventDefault()
+        noteClick(e.target)
+    })
+    notes.insertBefore(note, notes.firstElementChild)
+    empty(emptyNoteText, notes)
+}
+
+function empty(value = '', container) {
+    let emptyEl;
+    if (container.children.length == 0) {
+        emptyEl = document.createElement('span')
+        emptyEl.id = 'empty-el'
+        emptyEl.textContent = value
+        container.append(emptyEl)
+    } else {
+        emptyEl = container.querySelector('#empty-el')
+        if (emptyEl != null) {
+            emptyEl.remove()
+        }
+    }
+}
